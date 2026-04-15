@@ -4,6 +4,15 @@
 // process exits immediately with a clear error — no silent defaults.
 package config
 
+import (
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
+
+	"github.com/joho/godotenv"
+)
+
 // Config is the root configuration object. Each service only reads the
 // sub-struct it cares about (e.g. the simulator only needs Kafka and Simulator).
 type Config struct {
@@ -76,7 +85,121 @@ type SinkConfig struct {
 
 // Load reads all configuration from environment variables.
 // It loads a .env file first if one is present (local development only).
-// Returns a descriptive error if any required variable is missing or unparseable.
+// Returns a descriptive error listing ALL missing variables at once so
+// the developer doesn't have to fix them one by one.
 func Load() (*Config, error) {
-	panic("not implemented — implement in Phase 1")
+	// Load .env into the process environment if the file exists.
+	// Silently ignored if the file is absent — in production, env vars
+	// are injected by the platform (Kubernetes, systemd, etc.).
+	_ = godotenv.Load()
+
+	var missing []string
+
+	// requireStr reads a required env var. Appends to missing if absent.
+	requireStr := func(key string) string {
+		v := os.Getenv(key)
+		if v == "" {
+			missing = append(missing, key)
+		}
+		return v
+	}
+
+	// optStr reads an optional env var, returning def if absent.
+	optStr := func(key, def string) string {
+		if v := os.Getenv(key); v != "" {
+			return v
+		}
+		return def
+	}
+
+	// optInt reads an optional integer env var, returning def if absent or unparseable.
+	optInt := func(key string, def int) int {
+		v := os.Getenv(key)
+		if v == "" {
+			return def
+		}
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			missing = append(missing, fmt.Sprintf("%s (must be an integer, got %q)", key, v))
+			return def
+		}
+		return n
+	}
+
+	// optFloat reads an optional float64 env var, returning def if absent or unparseable.
+	optFloat := func(key string, def float64) float64 {
+		v := os.Getenv(key)
+		if v == "" {
+			return def
+		}
+		f, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			missing = append(missing, fmt.Sprintf("%s (must be a float, got %q)", key, v))
+			return def
+		}
+		return f
+	}
+
+	// optBool reads an optional boolean env var, returning def if absent or unparseable.
+	optBool := func(key string, def bool) bool {
+		v := os.Getenv(key)
+		if v == "" {
+			return def
+		}
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			missing = append(missing, fmt.Sprintf("%s (must be true/false, got %q)", key, v))
+			return def
+		}
+		return b
+	}
+
+	cfg := &Config{
+		Kafka: KafkaConfig{
+			BootstrapServers:        requireStr("KAFKA_BOOTSTRAP_SERVERS"),
+			APIKey:                  requireStr("KAFKA_API_KEY"),
+			APISecret:               requireStr("KAFKA_API_SECRET"),
+			SchemaRegistryURL:       requireStr("SCHEMA_REGISTRY_URL"),
+			SchemaRegistryAPIKey:    requireStr("SCHEMA_REGISTRY_API_KEY"),
+			SchemaRegistryAPISecret: requireStr("SCHEMA_REGISTRY_API_SECRET"),
+		},
+		Postgres: PostgresConfig{
+			DSN: requireStr("POSTGRES_DSN"),
+		},
+		Timescale: TimescaleConfig{
+			DSN: requireStr("TIMESCALE_DSN"),
+		},
+		Simulator: SimulatorConfig{
+			DeviceCount:    optInt("SIMULATOR_DEVICE_COUNT", 1000),
+			EmitIntervalMS: optInt("SIMULATOR_EMIT_INTERVAL_MS", 1000),
+			ChaosMode:      optBool("SIMULATOR_CHAOS_MODE", false),
+		},
+		Ingestor: IngestorConfig{
+			BatchSize:       optInt("INGESTOR_BATCH_SIZE", 500),
+			FlushIntervalMS: optInt("INGESTOR_FLUSH_INTERVAL_MS", 500),
+			ConsumerGroup:   optStr("INGESTOR_CONSUMER_GROUP", "telemetryflow-ingestor"),
+		},
+		Processor: ProcessorConfig{
+			ConsumerGroup:          optStr("PROCESSOR_CONSUMER_GROUP", "telemetryflow-processor"),
+			WindowSizeSeconds:      optInt("PROCESSOR_WINDOW_SIZE_SECONDS", 60),
+			AnomalyTempHigh:        optFloat("PROCESSOR_ANOMALY_TEMP_HIGH", 85.0),
+			AnomalyTempLow:         optFloat("PROCESSOR_ANOMALY_TEMP_LOW", -10.0),
+			AnomalyBatteryLow:      optFloat("PROCESSOR_ANOMALY_BATTERY_LOW", 10.0),
+			EnrichmentCacheTTLSecs: optInt("PROCESSOR_ENRICHMENT_CACHE_TTL_SECONDS", 300),
+		},
+		Sink: SinkConfig{
+			ConsumerGroup:   optStr("SINK_CONSUMER_GROUP", "telemetryflow-sink"),
+			BatchSize:       optInt("SINK_BATCH_SIZE", 100),
+			FlushIntervalMS: optInt("SINK_FLUSH_INTERVAL_MS", 1000),
+		},
+	}
+
+	if len(missing) > 0 {
+		return nil, fmt.Errorf(
+			"missing or invalid environment variables:\n  %s\n\nCopy .env.example to .env and fill in the values.",
+			strings.Join(missing, "\n  "),
+		)
+	}
+
+	return cfg, nil
 }
