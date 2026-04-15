@@ -1,0 +1,10 @@
+go 1.23.0
+
+use (
+	./config
+	./pkg
+	./services/simulator
+	./services/ingestor
+	./services/processor
+	./services/sink
+)

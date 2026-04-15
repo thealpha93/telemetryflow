@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(chmod +x /Users/aakashtm/Documents/personal/TelemetryFlow/scripts/create-topics.sh)"
+    ]
+  }
+}

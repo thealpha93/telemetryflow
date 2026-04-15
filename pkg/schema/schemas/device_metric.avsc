@@ -1,0 +1,16 @@
+{
+  "type": "record",
+  "name": "DeviceMetric",
+  "namespace": "io.telemetryflow",
+  "doc": "A single telemetry reading emitted by a device. Subject: device.metrics-value.",
+  "fields": [
+    {"name": "device_id",        "type": "string",                              "doc": "Unique device identifier. Used as the Kafka partition key."},
+    {"name": "timestamp",        "type": "long",   "logicalType": "timestamp-millis", "doc": "Unix epoch milliseconds when the reading was taken."},
+    {"name": "temperature",      "type": "float",                               "doc": "Temperature in degrees Celsius."},
+    {"name": "humidity",         "type": "float",                               "doc": "Relative humidity percentage (0-100)."},
+    {"name": "pressure",         "type": "float",                               "doc": "Atmospheric pressure in hPa."},
+    {"name": "battery_level",    "type": "float",                               "doc": "Battery charge percentage (0-100)."},
+    {"name": "firmware_version", "type": "string",                              "doc": "Firmware version string, e.g. v1.2.0."},
+    {"name": "location_id",      "type": "string",                              "doc": "Logical location identifier for grouping devices."}
+  ]
+}
