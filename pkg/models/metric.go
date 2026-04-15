@@ -1,8 +1,3 @@
-// Package models defines the core domain types shared across all TelemetryFlow
-// services. These are plain Go structs with no framework dependencies.
-//
-// Types here map 1:1 to Avro schemas in pkg/schema/schemas/.
-// They also map to the database tables defined in migrations/.
 package models
 
 import "time"
@@ -12,14 +7,16 @@ import "time"
 //
 // Data path: Simulator → device.metrics (Kafka) → Ingestor → TimescaleDB
 //
-// Field types use float32 to match the Avro schema (Avro "float" = 32-bit).
+// Avro field names (snake_case) are mapped via struct tags.
+// hamba/avro uses these tags to encode/decode the binary payload.
+// time.Time maps to Avro long + logicalType:timestamp-millis automatically.
 type DeviceMetric struct {
-	DeviceID        string
-	Timestamp       time.Time
-	Temperature     float32
-	Humidity        float32
-	Pressure        float32
-	BatteryLevel    float32
-	FirmwareVersion string
-	LocationID      string
+	DeviceID        string    `avro:"device_id"`
+	Timestamp       time.Time `avro:"timestamp"`
+	Temperature     float32   `avro:"temperature"`
+	Humidity        float32   `avro:"humidity"`
+	Pressure        float32   `avro:"pressure"`
+	BatteryLevel    float32   `avro:"battery_level"`
+	FirmwareVersion string    `avro:"firmware_version"`
+	LocationID      string    `avro:"location_id"`
 }

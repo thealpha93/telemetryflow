@@ -6,7 +6,7 @@ import "time"
 // These map directly to the AlertType enum in device_alert.avsc.
 //
 // IMPORTANT: This type is part of the public contract on device.alerts.
-// Never remove or change existing values — only add new ones (ADR-007 + CLAUDE.md).
+// Never remove or change existing values — only add new ones (CLAUDE.md).
 type AlertType string
 
 const (
@@ -35,14 +35,15 @@ const (
 // Data path: Processor → device.alerts (Kafka) → Sink → PostgreSQL alerts table
 //                                               → External notification service
 //
-// Field types use float32/int32 to match the Avro schema.
+// AlertType and Severity are Avro enum types — hamba/avro serializes them
+// as strings and validates against the enum symbols in the schema.
 type DeviceAlert struct {
-	AlertID        string
-	DeviceID       string
-	AlertType      AlertType
-	Severity       Severity
-	TriggeredAt    time.Time
-	MetricValue    float32
-	ThresholdValue float32
-	WindowSeconds  int32
+	AlertID        string    `avro:"alert_id"`
+	DeviceID       string    `avro:"device_id"`
+	AlertType      AlertType `avro:"alert_type"`
+	Severity       Severity  `avro:"severity"`
+	TriggeredAt    time.Time `avro:"triggered_at"`
+	MetricValue    float32   `avro:"metric_value"`
+	ThresholdValue float32   `avro:"threshold_value"`
+	WindowSeconds  int32     `avro:"window_seconds"`
 }
