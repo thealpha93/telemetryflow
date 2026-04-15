@@ -5,21 +5,47 @@
 //   - JSON output to stdout (structured, machine-parseable)
 //   - INFO level by default (override with LOG_LEVEL env var)
 //   - Always log with context: slog.InfoContext(ctx, "msg", "key", val)
-//
-// Why slog over zap/zerolog?
-// slog is stdlib in Go 1.21+. Zero extra dependencies, structured by default,
-// and fast enough for our throughput. Adding a third-party logging library
-// would add complexity with no meaningful gain at this scale.
 package logger
 
-import "log/slog"
+import (
+	"log/slog"
+	"os"
+	"strings"
+)
 
-// New creates and returns a *slog.Logger that writes JSON to stdout.
+// New creates a *slog.Logger that writes JSON to stdout.
+// Log level is read from the LOG_LEVEL environment variable.
+// Valid values: DEBUG, INFO, WARN, ERROR (case-insensitive). Defaults to INFO.
 //
-// Usage:
-//
-//	log := logger.New()
-//	slog.SetDefault(log) // makes slog.InfoContext etc. use this logger
+// Call slog.SetDefault(logger.New()) in main() so package-level slog
+// functions (slog.InfoContext, slog.ErrorContext, etc.) use this logger.
 func New() *slog.Logger {
-	panic("not implemented — implement in Phase 1")
+	level := parseLevel(os.Getenv("LOG_LEVEL"))
+
+	handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: level,
+
+		// AddSource adds "source":{"function":"...","file":"...","line":N}
+		// to every log entry — useful in production for tracing errors back
+		// to the exact line without a stack trace.
+		AddSource: level == slog.LevelDebug,
+	})
+
+	return slog.New(handler)
+}
+
+// parseLevel converts a string to a slog.Level.
+// Unrecognised values fall back to INFO so a misconfigured LOG_LEVEL
+// never silently disables logging.
+func parseLevel(s string) slog.Level {
+	switch strings.ToUpper(s) {
+	case "DEBUG":
+		return slog.LevelDebug
+	case "WARN", "WARNING":
+		return slog.LevelWarn
+	case "ERROR":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
+	}
 }
