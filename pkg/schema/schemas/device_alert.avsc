@@ -4,8 +4,8 @@
   "namespace": "io.telemetryflow",
   "doc": "An anomaly alert produced by the stream processor. Subject: device.alerts-value. This schema is a PUBLIC CONTRACT — see CLAUDE.md before making any changes.",
   "fields": [
-    {"name": "alert_id",        "type": "string",                                "doc": "UUID identifying this alert instance."},
-    {"name": "device_id",       "type": "string",                                "doc": "Device that triggered the alert. Kafka partition key."},
+    {"name": "alert_id",        "type": "string",                                             "doc": "UUID identifying this alert instance."},
+    {"name": "device_id",       "type": "string",                                             "doc": "Device that triggered the alert. Kafka partition key."},
     {"name": "alert_type",      "type": {
       "type": "enum",
       "name": "AlertType",
@@ -18,9 +18,9 @@
       "doc": "Alert urgency level. NEVER remove or rename symbols — only add new ones.",
       "symbols": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
     }},
-    {"name": "triggered_at",    "type": "long",  "logicalType": "timestamp-millis", "doc": "Unix epoch milliseconds when the anomaly was first detected."},
-    {"name": "metric_value",    "type": "float",                                 "doc": "The actual metric value that crossed the threshold."},
-    {"name": "threshold_value", "type": "float",                                 "doc": "The configured threshold that was exceeded."},
-    {"name": "window_seconds",  "type": "int",                                   "doc": "Length of the sliding window over which the anomaly was computed."}
+    {"name": "triggered_at",    "type": {"type": "long", "logicalType": "timestamp-millis"}, "doc": "Unix epoch milliseconds when the anomaly was first detected."},
+    {"name": "metric_value",    "type": "float",                                             "doc": "The actual metric value that crossed the threshold."},
+    {"name": "threshold_value", "type": "float",                                             "doc": "The configured threshold that was exceeded."},
+    {"name": "window_seconds",  "type": "int",                                               "doc": "Length of the sliding window over which the anomaly was computed."}
   ]
 }
