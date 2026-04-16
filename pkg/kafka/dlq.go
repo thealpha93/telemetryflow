@@ -1,51 +1,80 @@
 package kafka
 
+import (
+	"context"
+	"fmt"
+	"strconv"
+	"time"
+
+	"github.com/telemetryflow/config"
+	"github.com/twmb/franz-go/pkg/kgo"
+)
+
 // DLQPublisher routes unprocessable messages to a dead-letter topic (ADR-007).
 //
-// A message goes to the DLQ after 3 failed processing attempts. The DLQ record
-// preserves the original payload and attaches error metadata as Kafka headers:
+// A DLQ record is the original message payload plus five Kafka headers that
+// capture why and where it failed:
 //
-//	error_reason      — human-readable description of why processing failed
-//	failed_at         — RFC3339 timestamp of the final failure
-//	original_topic    — topic the message was originally consumed from
-//	original_partition — partition number (as a string)
-//	original_offset   — offset of the failed record (as a string)
+//	error_reason        — human-readable description (the error string)
+//	failed_at           — RFC3339 UTC timestamp of the failure
+//	original_topic      — topic the message was consumed from
+//	original_partition  — partition number as a decimal string
+//	original_offset     — message offset as a decimal string
 //
-// This allows the failed message to be inspected and replayed without
-// redeploying the service. The DLQ topic is separate from the main topic
-// so a poison pill cannot block the main pipeline's partition.
+// This is enough information to inspect the record and replay it later
+// without redeploying the service.
 //
-// If publishing to the DLQ itself fails, the error is logged and an error
-// counter is incremented. The DLQ failure must NEVER block the main pipeline
-// (see CLAUDE.md "What NOT To Do").
-//
-// Usage:
-//
-//	dlq, err := NewDLQPublisher(cfg.Kafka, TopicMetricsDLQ)
-//	defer dlq.Close()
-//
-//	if err := process(record); err != nil {
-//	    if dlqErr := dlq.Publish(ctx, record, err); dlqErr != nil {
-//	        slog.ErrorContext(ctx, "dlq publish failed", "error", dlqErr)
-//	        // do not return — continue processing other records
-//	    }
-//	}
+// DLQ publish errors are returned to the caller but must never block the
+// main pipeline — log the error, increment a counter, and continue.
 type DLQPublisher struct {
-	// TODO: embed *Producer
+	producer *Producer
+	topic    string
 }
 
-// NewDLQPublisher creates a DLQPublisher that sends failed records to dlqTopic.
-func NewDLQPublisher() (*DLQPublisher, error) {
-	panic("not implemented — implement in Phase 1")
+// NewDLQPublisher creates a DLQPublisher that routes failed records to dlqTopic.
+// It reuses the standard idempotent Producer — DLQ writes are not transactional
+// because the risk of a duplicate DLQ entry is far lower than blocking the pipeline.
+func NewDLQPublisher(cfg config.KafkaConfig, dlqTopic string) (*DLQPublisher, error) {
+	producer, err := NewProducer(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("kafka dlq: creating producer for topic %q: %w", dlqTopic, err)
+	}
+	return &DLQPublisher{
+		producer: producer,
+		topic:    dlqTopic,
+	}, nil
 }
 
-// Publish sends the original record to the DLQ topic with error metadata headers.
-// This is fire-and-forget from the caller's perspective — errors are logged internally.
-func (d *DLQPublisher) Publish() error {
-	panic("not implemented — implement in Phase 1")
+// Publish sends original to the DLQ topic with error metadata headers.
+//
+// The original record's key and value are preserved unchanged so that replays
+// can re-route the message back to the primary topic and retry processing.
+func (d *DLQPublisher) Publish(ctx context.Context, original *kgo.Record, reason error) error {
+	headers := []kgo.RecordHeader{
+		{Key: "error_reason", Value: []byte(reason.Error())},
+		{Key: "failed_at", Value: []byte(time.Now().UTC().Format(time.RFC3339))},
+		{Key: "original_topic", Value: []byte(original.Topic)},
+		{Key: "original_partition", Value: []byte(strconv.Itoa(int(original.Partition)))},
+		{Key: "original_offset", Value: []byte(strconv.FormatInt(original.Offset, 10))},
+	}
+
+	// Build a new record targeting the DLQ topic. The original headers are
+	// appended after the error metadata so nothing from the source is lost.
+	dlqRecord := &kgo.Record{
+		Topic:   d.topic,
+		Key:     original.Key,
+		Value:   original.Value,
+		Headers: append(headers, original.Headers...),
+	}
+
+	results := d.producer.client.ProduceSync(ctx, dlqRecord)
+	if err := results.FirstErr(); err != nil {
+		return fmt.Errorf("kafka dlq: publishing to %q: %w", d.topic, err)
+	}
+	return nil
 }
 
-// Close flushes and closes the underlying producer.
+// Close flushes any buffered DLQ records and closes the underlying producer.
 func (d *DLQPublisher) Close() {
-	panic("not implemented — implement in Phase 1")
+	d.producer.Close()
 }

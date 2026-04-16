@@ -1,16 +1,21 @@
 package db
 
-// RunMigrations applies all pending goose migrations from the given directory
-// against the given database connection.
+import (
+	"context"
+	"fmt"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/pressly/goose/v3"
+)
+
+// RunMigrations applies all pending goose migrations from dir against the
+// database backing pool.
 //
-// Goose tracks applied migrations in a goose_db_version table. Running
-// migrations twice is safe — already-applied migrations are skipped.
+// goose tracks applied migrations in a goose_db_version table — running this
+// twice is safe; already-applied migrations are skipped.
 //
-// Migration files use the naming convention:
-//
-//	NNN_description.sql  (e.g. 001_create_devices.sql)
-//
-// Each file contains goose annotations:
+// dir must contain numbered .sql files with goose annotations:
 //
 //	-- +goose Up
 //	CREATE TABLE ...;
@@ -18,11 +23,22 @@ package db
 //	-- +goose Down
 //	DROP TABLE ...;
 //
-// Usage (called from each service's main.go on startup):
-//
-//	if err := db.RunMigrations(ctx, pool, "migrations/postgres"); err != nil {
-//	    return fmt.Errorf("postgres migrations failed: %w", err)
-//	}
-func RunMigrations() error {
-	panic("not implemented — implement in Phase 1")
+// Call once per service on startup before accepting any traffic. If migrations
+// fail, the service should exit — operating on a stale schema is worse than
+// not starting.
+func RunMigrations(ctx context.Context, pool *pgxpool.Pool, dir string) error {
+	// stdlib.OpenDBFromPool wraps the pgxpool in a database/sql adapter.
+	// goose uses database/sql, so this is the bridge between the two APIs.
+	// The underlying connections still come from the pool.
+	sqlDB := stdlib.OpenDBFromPool(pool)
+
+	if err := goose.SetDialect("postgres"); err != nil {
+		return fmt.Errorf("db: setting goose dialect: %w", err)
+	}
+
+	if err := goose.UpContext(ctx, sqlDB, dir); err != nil {
+		return fmt.Errorf("db: running migrations from %q: %w", dir, err)
+	}
+
+	return nil
 }
