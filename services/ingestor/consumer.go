@@ -116,10 +116,18 @@ func (c *ingestorConsumer) Run(ctx context.Context) error {
 		// Flush when the batch is full or the interval has elapsed.
 		// len(pendingMetrics) check excludes DLQ-only batches from triggering
 		// a DB write; we still commit their offsets via flush.
+		//
+		// CRITICAL: skip the flush if ctx is already cancelled. Calling
+		// flush(ctx) with a cancelled context would cause WriteBatch and
+		// Commit to fail immediately with context.Canceled, which:
+		//   1. Spuriously DLQs perfectly-good records
+		//   2. Clears pendingRecords (via defer), so Shutdown.flush sees nothing
+		//   3. Records are not committed → redelivered on restart
+		// Let Shutdown own the final flush — it has a fresh context.
 		shouldFlush := len(c.pendingMetrics) >= c.batchSize ||
 			(len(c.pendingRecords) > 0 && time.Since(lastFlush) >= c.flushInterval)
 
-		if shouldFlush {
+		if shouldFlush && ctx.Err() == nil {
 			if err := c.flush(ctx); err != nil {
 				return err
 			}

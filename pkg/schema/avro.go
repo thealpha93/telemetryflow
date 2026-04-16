@@ -23,6 +23,9 @@ var (
 
 	//go:embed schemas/device_alert.avsc
 	DeviceAlertSchema string
+
+	//go:embed schemas/device_aggregate.avsc
+	DeviceAggregateSchema string
 )
 
 // Serializer encodes Go structs into the Confluent Avro wire format:

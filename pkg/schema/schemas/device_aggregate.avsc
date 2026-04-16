@@ -1,0 +1,17 @@
+{
+  "type": "record",
+  "name": "DeviceAggregate",
+  "namespace": "io.telemetryflow",
+  "doc": "Per-device sliding window aggregate produced by the stream processor. Subject: device.aggregated-value.",
+  "fields": [
+    {"name": "device_id",    "type": "string",                                             "doc": "Device that produced these readings. Kafka partition key."},
+    {"name": "location_id",  "type": "string",                                             "doc": "Logical location of the device, enriched from the device registry."},
+    {"name": "window_start", "type": {"type": "long", "logicalType": "timestamp-millis"}, "doc": "Timestamp of the oldest reading in the window."},
+    {"name": "window_end",   "type": {"type": "long", "logicalType": "timestamp-millis"}, "doc": "Timestamp of the newest reading in the window."},
+    {"name": "avg_temp",     "type": "float",                                             "doc": "Mean temperature over the window (°C)."},
+    {"name": "max_temp",     "type": "float",                                             "doc": "Maximum temperature observed in the window (°C)."},
+    {"name": "min_temp",     "type": "float",                                             "doc": "Minimum temperature observed in the window (°C)."},
+    {"name": "avg_battery",  "type": "float",                                             "doc": "Mean battery level over the window (%)."},
+    {"name": "sample_count", "type": "int",                                               "doc": "Number of readings that contributed to this aggregate."}
+  ]
+}
